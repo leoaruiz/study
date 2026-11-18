@@ -157,8 +157,9 @@ if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
 
 /* ---------- Markdown ---------- */
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const unesc = s => s.replace(/\\([\\`*_{}\[\]()#+\-.!&|~<>])/g, '$1');
 function inline(s) {
-  return esc(s)
+  return esc(unesc(s))
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, '$1<em>$2</em>')
@@ -193,26 +194,78 @@ function titleOf(text, fallback) { const m = text.match(/^#\s+(.+)$/m); return m
 
 /* ---------- Flashcard extraction ---------- */
 function hash(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); }
-const strip = s => s.replace(/\*\*/g, '').replace(/`/g, '').trim();
+const strip = s => unesc(s.replace(/\*\*/g, '').replace(/`/g, '')).replace(/^\*|\*$/g, '').trim();
+const cardCache = new Map();
 function extractCards(doc) {
   if (doc.type !== 'md') return [];
-  const L = doc.text.replace(/\r/g, '').split('\n'), cards = []; let inQuiz = false;
+  const key = doc.id + '|' + doc.text.length;
+  if (cardCache.has(key)) return cardCache.get(key);
+  const L = doc.text.replace(/\r/g, '').split('\n'), cards = [];
+  let inQuiz = false, inTableQs = false, section = '';
   for (let i = 0; i < L.length; i++) {
     const l = L[i], h = l.match(/^#{1,6}\s+(.*)/);
-    if (h) { inQuiz = /quiz|self-test|review questions|flash ?cards|practice questions/i.test(h[1]); continue; }
+    if (h) {
+      section = strip(h[1]).replace(/^Pomodoro \d+:\s*/i, '');
+      inQuiz = /quiz|self-test|review questions|flash ?cards|practice questions/i.test(h[1]);
+      inTableQs = /questions with answers|answer key/i.test(h[1]);
+      continue;
+    }
     let m;
-    if (inQuiz && (m = l.match(/^\s*\d+[.)]\s+(.+?)\s*\*\*(.+?)\*\*\s*$/))) cards.push({ q: strip(m[1]), a: strip(m[2]) });
-    else if ((m = l.match(/^\s*(?:[-*]\s*)?\**Q:\**\s*(.+)/i)) && L[i + 1] && /^\s*(?:[-*]\s*)?\**A:/i.test(L[i + 1])) {
-      cards.push({ q: strip(m[1]), a: strip(L[i + 1].replace(/^\s*(?:[-*]\s*)?\**A:\**\s*/i, '')) }); i++;
+    // 1) "N. Question? **Answer.**" lines under a Self-quiz heading
+    if (inQuiz && (m = l.match(/^\s*\d+[.)]\s+(.+?)\s*\*\*(.+?)\*\*\s*$/))) { cards.push({ q: strip(m[1]), a: strip(m[2]), tag: section }); continue; }
+    // 2) "**Self-check…**" block: numbered questions, then "*Answers: a · b · c*"
+    if (/^\s*\*\*[^*]*self-check[^*]*\*\*\s*$/i.test(l)) {
+      const qs = []; let j = i + 1;
+      for (; j < L.length; j++) {
+        const t = L[j];
+        if (!t.trim()) continue;
+        const qm = t.match(/^\s*\d+[.)]\s+(.+)/);
+        if (qm) { qs.push(strip(qm[1])); continue; }
+        break;
+      }
+      const am = L[j] && L[j].match(/^\s*\*?\s*Answers?:\s*(.+?)\*?\s*$/i);
+      if (am && qs.length) {
+        const as = am[1].split(/\s+·\s+/).map(strip);
+        if (as.length === qs.length) qs.forEach((q, k) => cards.push({ q, a: as[k], tag: section }));
+        i = j; continue;
+      }
+    }
+    // 3) Table of handbook questions: | # | Question | Answer | Why |
+    if (inTableQs && l.trim().startsWith('|') && L[i + 1] && /^\s*\|?\s*:?-{3,}/.test(L[i + 1])) {
+      const head = cells(l).map(x => x.toLowerCase());
+      const qi = head.findIndex(x => x.startsWith('question')), ai = head.findIndex(x => x.startsWith('answer'));
+      const ni = head.findIndex(x => x === 'why' || x === 'note' || x === 'notes');
+      if (qi >= 0 && ai >= 0) {
+        i += 2;
+        while (i < L.length && L[i].trim().startsWith('|')) {
+          const c = cells(L[i]);
+          if (c[qi] && c[ai]) cards.push({ q: strip(c[qi]), a: strip(c[ai]), note: ni >= 0 ? strip(c[ni] || '') : '', tag: 'Handbook ' + strip(c[0] || '') });
+          i++;
+        }
+        i--; continue;
+      }
+    }
+    // 4) "Q: …" / "A: …" pairs anywhere
+    if ((m = l.match(/^\s*(?:[-*]\s*)?\**Q:\**\s*(.+)/i)) && L[i + 1] && /^\s*(?:[-*]\s*)?\**A:/i.test(L[i + 1])) {
+      cards.push({ q: strip(m[1]), a: strip(L[i + 1].replace(/^\s*(?:[-*]\s*)?\**A:\**\s*/i, '')), tag: section }); i++;
     }
   }
-  return cards.map(c => ({ ...c, id: doc.id + ':' + hash(c.q), docId: doc.id, docName: doc.name }));
+  const seen = new Set();
+  const out = cards.map(c => {
+    let id = doc.id + ':' + hash((c.tag || '') + '|' + c.q);
+    while (seen.has(id)) id += '+';
+    seen.add(id);
+    return { ...c, id, docId: doc.id, docName: doc.name };
+  });
+  cardCache.set(key, out);
+  return out;
 }
+const shortName = n => n.replace(/^FITSP-Auditor Study Guide:\s*/i, '').replace(/^(Module \d+) Study Guide:\s*/i, '$1: ');
 
 /* ---------- State ---------- */
 let docs = [], progress = new Map(), tab = 'library', openDoc = null, deck = 'all', session = null;
 async function load() {
-  docs = (await getAll('docs')).sort((a, b) => a.added - b.added);
+  docs = (await getAll('docs')).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   progress = new Map((await getAll('progress')).map(p => [p.id, p]));
 }
 const box = id => (progress.get(id) || { box: 0 }).box;
@@ -222,6 +275,7 @@ const MASTERED = 2;
 async function syncBundled() {
   try {
     const list = await (await fetch('materials/index.json', { cache: 'no-cache' })).json();
+    for (const d of docs) if (d.id.startsWith('bundled:') && !list.includes(d.id.slice(8))) await del('docs', d.id);
     for (const f of list) {
       const id = 'bundled:' + f;
       const r = await fetch('materials/' + encodeURIComponent(f)); if (!r.ok) continue;
@@ -272,7 +326,7 @@ function renderLibrary() {
     const bar = s.total ? `<div class="bar"><i style="width:${Math.round(100 * s.mastered / s.total)}%"></i></div>` : '';
     return `<button class="doc" data-open="${esc(d.id)}">
       <span class="kind ${d.type}">${d.type === 'pdf' ? 'PDF' : 'MD'}</span>
-      <span style="flex:1;min-width:0"><div class="name">${esc(d.name)}</div><div class="meta">${meta}</div>${bar}</span>
+      <span style="flex:1;min-width:0"><div class="name">${esc(shortName(d.name))}</div><div class="meta">${meta}</div>${bar}</span>
       <span class="muted">›</span></button>`;
   }).join('');
   view.innerHTML = `
@@ -348,7 +402,7 @@ function renderCards() {
   if (!session) buildSession();
   const chips = `<div class="deckpick">
     <button class="chip ${deck === 'all' ? 'on' : ''}" data-deck="all">All decks</button>
-    ${withCards.map(d => `<button class="chip ${deck === d.id ? 'on' : ''}" data-deck="${esc(d.id)}">${esc(d.name.replace(/^FITSP-Auditor Study Guide:\s*/i, ''))}</button>`).join('')}</div>`;
+    ${withCards.map(d => `<button class="chip ${deck === d.id ? 'on' : ''}" data-deck="${esc(d.id)}">${esc(shortName(d.name).replace(/:.*/, ''))}</button>`).join('')}</div>`;
   const all = deckCards(), mastered = all.filter(c => box(c.id) >= MASTERED).length;
   let body;
   if (!all.length) {
@@ -362,9 +416,9 @@ function renderCards() {
     const c = session.queue[0];
     body = `<div class="progress"><span>Card ${session.done + 1} of ${session.total}</span><span>${mastered}/${all.length} mastered</span></div>
       <button class="card" id="card">
-        ${deck === 'all' ? `<div class="src">${esc(c.docName.replace(/^FITSP-Auditor Study Guide:\s*/i, ''))}</div>` : ''}
+        <div class="src">${esc([deck === 'all' ? shortName(c.docName).replace(/:.*/, '') : '', c.tag || ''].filter(Boolean).join(' · '))}</div>
         <div class="q">${inline(c.q)}</div>
-        ${session.flipped ? `<div class="a">${inline(c.a)}</div>` : `<div class="hint">Say your answer out loud, then tap to check</div>`}
+        ${session.flipped ? `<div class="a">${inline(c.a)}</div>${c.note ? `<div class="hint" style="font-size:16px">${inline(c.note)}</div>` : ''}` : `<div class="hint">Say your answer out loud, then tap to check</div>`}
       </button>
       <div class="grade ${session.flipped ? '' : 'hidden'}">
         <button class="again" id="again">Again</button><button class="got" id="got">Got it</button></div>`;

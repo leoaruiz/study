@@ -1,5 +1,5 @@
 // Offline cache for the Study app. Bump VERSION whenever you change app files.
-const VERSION = 'study-v1';
+const VERSION = 'study-v2';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
