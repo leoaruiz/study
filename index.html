@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Study">
+<meta name="theme-color" content="#1f2a37">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Study</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d232b; --muted: #66707c; --line: #e3e1da;
+    --accent: #2f6f5e; --accent-ink: #ffffff; --accent-soft: #e3efe9;
+    --warn: #b4532a; --warn-soft: #f7e6dc; --header: #1f2a37; --header-ink: #f3f1ea;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #13171c; --panel: #1c2229; --ink: #e9e7e1; --muted: #98a1ab; --line: #2c343d;
+      --accent: #5fb39a; --accent-ink: #0d1512; --accent-soft: #1f3530;
+      --warn: #e08a63; --warn-soft: #3a261d; --header: #0d1115; --header-ink: #e9e7e1;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  header {
+    position: sticky; top: 0; z-index: 10; background: var(--header); color: var(--header-ink);
+    padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 18px) 10px calc(env(safe-area-inset-left) + 18px);
+    display: flex; align-items: center; gap: 14px;
+  }
+  header h1 { font-size: 19px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  .tabs { display: flex; gap: 4px; background: rgba(255,255,255,.08); padding: 4px; border-radius: 12px; }
+  .tabs button { padding: 7px 14px; border-radius: 9px; font-size: 15px; color: var(--header-ink); opacity: .75; }
+  .tabs button.on { background: rgba(255,255,255,.16); opacity: 1; font-weight: 600; }
+  .spacer { flex: 1; }
+  .pomo { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.08);
+    border-radius: 12px; padding: 4px 4px 4px 12px; }
+  .pomo .label { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; opacity: .7; }
+  .pomo .time { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 17px; min-width: 52px; text-align: center; }
+  .pomo button { width: 34px; height: 34px; border-radius: 9px; color: var(--header-ink); font-size: 15px; }
+  .pomo button:active { background: rgba(255,255,255,.16); }
+  .pomo.running .time { color: #9fe0c9; }
+  .pomo.break .label { color: #f2c38f; }
+
+  main { max-width: 860px; margin: 0 auto;
+    padding: 22px calc(env(safe-area-inset-right) + 18px) calc(env(safe-area-inset-bottom) + 40px) calc(env(safe-area-inset-left) + 18px); }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .btn { background: var(--accent); color: var(--accent-ink); padding: 11px 18px; border-radius: 12px; font-weight: 600; }
+  .btn.ghost { background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+  .btn.small { padding: 7px 12px; font-size: 15px; }
+  .muted { color: var(--muted); }
+  h2.section { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 26px 0 10px; font-weight: 600; }
+
+  .doc { display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; width: 100%; text-align: left; }
+  .doc .kind { width: 42px; height: 42px; border-radius: 10px; display: grid; place-items: center; font-size: 12px; font-weight: 700;
+    background: var(--accent-soft); color: var(--accent); flex: none; letter-spacing: .5px; }
+  .doc .kind.pdf { background: var(--warn-soft); color: var(--warn); }
+  .doc .name { font-weight: 600; }
+  .doc .meta { font-size: 14px; color: var(--muted); }
+  .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 6px; width: 160px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+  .empty { text-align: center; padding: 40px 20px; border: 2px dashed var(--line); border-radius: var(--radius); }
+
+  /* Reader */
+  .reader { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 26px 26px; }
+  .reader h1 { font-size: 28px; line-height: 1.25; margin: 18px 0 8px; }
+  .reader h2 { font-size: 22px; margin: 30px 0 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .reader h3 { font-size: 18px; margin: 22px 0 6px; }
+  .reader table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; font-size: 15.5px; display: block; overflow-x: auto; }
+  .reader th, .reader td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  .reader th { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  .reader code { background: var(--bg); padding: 1px 5px; border-radius: 5px; font-size: 15px; }
+  .reader li { margin: 4px 0; }
+  .reader strong { color: var(--accent); }
+  .pdfpages canvas { width: 100%; display: block; margin: 0 0 12px; border-radius: 6px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  .pdfpages .ph { width: 100%; aspect-ratio: 8.5/11; background: var(--line); border-radius: 6px; margin-bottom: 12px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+
+  /* Flashcards */
+  .deckpick { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .chip { padding: 8px 14px; border-radius: 20px; border: 1px solid var(--line); background: var(--panel); font-size: 15px; }
+  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; min-height: 300px;
+    padding: 34px 34px 28px; display: flex; flex-direction: column; justify-content: center; text-align: center;
+    box-shadow: 0 6px 24px rgba(0,0,0,.06); user-select: none; width: 100%; }
+  .card .q { font-size: 23px; line-height: 1.4; font-weight: 600; }
+  .card .a { font-size: 21px; line-height: 1.45; color: var(--accent); margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line); font-weight: 600; }
+  .card .hint { margin-top: 26px; font-size: 14px; color: var(--muted); }
+  .card .src { font-size: 13px; color: var(--muted); margin-bottom: 18px; text-transform: uppercase; letter-spacing: .8px; }
+  .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .grade button { padding: 18px; border-radius: 14px; font-size: 18px; font-weight: 650; }
+  .grade .again { background: var(--warn-soft); color: var(--warn); }
+  .grade .got { background: var(--accent-soft); color: var(--accent); }
+  .progress { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+
+  .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 24px);
+    background: var(--header); color: var(--header-ink); padding: 14px 20px; border-radius: 14px; font-weight: 600;
+    box-shadow: 0 8px 30px rgba(0,0,0,.25); z-index: 50; max-width: 90vw; text-align: center; }
+  .hidden { display: none !important; }
+  @media (max-width: 640px) { header { flex-wrap: wrap; } .pomo .label { display: none; } .reader { padding: 6px 16px 20px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Study</h1>
+  <div class="tabs">
+    <button data-tab="library" class="on">Library</button>
+    <button data-tab="cards">Flashcards</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="pomo" id="pomo">
+    <span class="label" id="pomoLabel">Focus</span>
+    <span class="time" id="pomoTime">25:00</span>
+    <button id="pomoToggle" aria-label="Start or pause">▶</button>
+    <button id="pomoReset" aria-label="Reset">↺</button>
+  </div>
+</header>
+
+<main id="view"></main>
+<input type="file" id="picker" accept=".md,.markdown,.txt,.pdf,text/markdown,text/plain,application/pdf" multiple hidden>
+<div class="toast hidden" id="toast"></div>
+
+<script type="module">
+/* ---------- Storage (IndexedDB) ---------- */
+const DB_NAME = 'study-app', DB_VER = 1;
+const dbp = new Promise((res, rej) => {
+  const r = indexedDB.open(DB_NAME, DB_VER);
+  r.onupgradeneeded = () => {
+    const db = r.result;
+    db.createObjectStore('docs', { keyPath: 'id' });
+    db.createObjectStore('progress', { keyPath: 'id' });
+  };
+  r.onsuccess = () => res(r.result);
+  r.onerror = () => rej(r.error);
+});
+async function tx(store, mode, fn) {
+  const db = await dbp;
+  return new Promise((res, rej) => {
+    const t = db.transaction(store, mode), s = t.objectStore(store);
+    const out = fn(s);
+    t.oncomplete = () => res(out && out.result !== undefined ? out.result : out);
+    t.onerror = () => rej(t.error);
+  });
+}
+const getAll = (store) => tx(store, 'readonly', s => s.getAll());
+const put = (store, v) => tx(store, 'readwrite', s => s.put(v));
+const del = (store, k) => tx(store, 'readwrite', s => s.delete(k));
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+
+/* ---------- Markdown ---------- */
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\s][^*]*?)\*/g, '$1<em>$2</em>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+function renderMd(src) {
+  const L = src.replace(/\r/g, '').split('\n'); let out = '', para = [];
+  const flush = () => { if (para.length) { out += `<p>${inline(para.join(' '))}</p>`; para = []; } };
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i];
+    if (!l.trim()) { flush(); continue; }
+    let m;
+    if ((m = l.match(/^(#{1,6})\s+(.*)/))) { flush(); const n = m[1].length; out += `<h${n}>${inline(m[2])}</h${n}>`; continue; }
+    if (l.trim().startsWith('|') && L[i + 1] && /^\s*\|?\s*:?-{3,}/.test(L[i + 1])) {
+      flush(); const head = cells(l); i += 2; let rows = '';
+      while (i < L.length && L[i].trim().startsWith('|')) { rows += '<tr>' + cells(L[i]).map(c => `<td>${inline(c)}</td>`).join('') + '</tr>'; i++; }
+      i--; out += `<table><thead><tr>${head.map(h => `<th>${inline(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`; continue;
+    }
+    const isUl = /^\s*[-*+]\s+/, isOl = /^\s*\d+[.)]\s+/;
+    if (isUl.test(l) || isOl.test(l)) {
+      flush(); const re = isUl.test(l) ? isUl : isOl, tag = re === isUl ? 'ul' : 'ol'; let items = '';
+      while (i < L.length && re.test(L[i])) { items += `<li>${inline(L[i].replace(re, ''))}</li>`; i++; }
+      i--; out += `<${tag}>${items}</${tag}>`; continue;
+    }
+    if (/^\s*(---|\*\*\*)\s*$/.test(l)) { flush(); out += '<hr>'; continue; }
+    para.push(l.trim());
+  }
+  flush(); return out;
+}
+function titleOf(text, fallback) { const m = text.match(/^#\s+(.+)$/m); return m ? m[1].trim() : fallback; }
+
+/* ---------- Flashcard extraction ---------- */
+function hash(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); }
+const strip = s => s.replace(/\*\*/g, '').replace(/`/g, '').trim();
+function extractCards(doc) {
+  if (doc.type !== 'md') return [];
+  const L = doc.text.replace(/\r/g, '').split('\n'), cards = []; let inQuiz = false;
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i], h = l.match(/^#{1,6}\s+(.*)/);
+    if (h) { inQuiz = /quiz|self-test|review questions|flash ?cards|practice questions/i.test(h[1]); continue; }
+    let m;
+    if (inQuiz && (m = l.match(/^\s*\d+[.)]\s+(.+?)\s*\*\*(.+?)\*\*\s*$/))) cards.push({ q: strip(m[1]), a: strip(m[2]) });
+    else if ((m = l.match(/^\s*(?:[-*]\s*)?\**Q:\**\s*(.+)/i)) && L[i + 1] && /^\s*(?:[-*]\s*)?\**A:/i.test(L[i + 1])) {
+      cards.push({ q: strip(m[1]), a: strip(L[i + 1].replace(/^\s*(?:[-*]\s*)?\**A:\**\s*/i, '')) }); i++;
+    }
+  }
+  return cards.map(c => ({ ...c, id: doc.id + ':' + hash(c.q), docId: doc.id, docName: doc.name }));
+}
+
+/* ---------- State ---------- */
+let docs = [], progress = new Map(), tab = 'library', openDoc = null, deck = 'all', session = null;
+async function load() {
+  docs = (await getAll('docs')).sort((a, b) => a.added - b.added);
+  progress = new Map((await getAll('progress')).map(p => [p.id, p]));
+}
+const box = id => (progress.get(id) || { box: 0 }).box;
+const MASTERED = 2;
+
+/* ---------- Bundled materials (shipped with the app) ---------- */
+async function syncBundled() {
+  try {
+    const list = await (await fetch('materials/index.json', { cache: 'no-cache' })).json();
+    for (const f of list) {
+      const id = 'bundled:' + f;
+      const r = await fetch('materials/' + encodeURIComponent(f)); if (!r.ok) continue;
+      const existing = docs.find(d => d.id === id);
+      if (f.toLowerCase().endsWith('.pdf')) {
+        if (existing) continue;
+        await put('docs', { id, type: 'pdf', name: f.replace(/\.pdf$/i, ''), blob: await r.blob(), added: Date.now() });
+      } else {
+        const text = await r.text();
+        if (existing && existing.text === text) continue;
+        await put('docs', { id, type: 'md', name: titleOf(text, f), text, added: existing ? existing.added : Date.now() });
+      }
+    }
+  } catch (e) { /* offline: keep what we have */ }
+}
+
+/* ---------- Import ---------- */
+const picker = document.getElementById('picker');
+picker.addEventListener('change', async () => {
+  let n = 0;
+  for (const f of picker.files) {
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    const id = 'user:' + f.name;
+    if (isPdf) await put('docs', { id, type: 'pdf', name: f.name.replace(/\.pdf$/i, ''), blob: f, added: Date.now() });
+    else { const text = await f.text(); await put('docs', { id, type: 'md', name: titleOf(text, f.name.replace(/\.(md|markdown|txt)$/i, '')), text, added: Date.now() }); }
+    n++;
+  }
+  picker.value = ''; await load(); render();
+  toast(`Added ${n} file${n === 1 ? '' : 's'}. Saved for offline use.`);
+});
+
+/* ---------- Views ---------- */
+const view = document.getElementById('view');
+function render() {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  if (tab === 'library') openDoc ? renderReader() : renderLibrary();
+  else renderCards();
+  window.scrollTo(0, 0);
+}
+function docStats(d) {
+  const cs = extractCards(d), m = cs.filter(c => box(c.id) >= MASTERED).length;
+  return { total: cs.length, mastered: m };
+}
+function renderLibrary() {
+  const items = docs.map(d => {
+    const s = docStats(d);
+    const meta = d.type === 'pdf' ? 'PDF' : s.total ? `${s.mastered} of ${s.total} cards mastered` : 'Notes';
+    const bar = s.total ? `<div class="bar"><i style="width:${Math.round(100 * s.mastered / s.total)}%"></i></div>` : '';
+    return `<button class="doc" data-open="${esc(d.id)}">
+      <span class="kind ${d.type}">${d.type === 'pdf' ? 'PDF' : 'MD'}</span>
+      <span style="flex:1;min-width:0"><div class="name">${esc(d.name)}</div><div class="meta">${meta}</div>${bar}</span>
+      <span class="muted">›</span></button>`;
+  }).join('');
+  view.innerHTML = `
+    <div class="row"><div style="flex:1"><div style="font-size:24px;font-weight:700">Your materials</div>
+      <div class="muted">${docs.length} item${docs.length === 1 ? '' : 's'}, all available offline</div></div>
+      <button class="btn" id="importBtn">+ Add files</button></div>
+    <h2 class="section">Library</h2>
+    ${items || `<div class="empty"><div style="font-size:20px;font-weight:600">Nothing here yet</div>
+      <p class="muted">Tap <b>Add files</b> to pick study guides (.md) or PDFs from the Files app.</p></div>`}`;
+  view.querySelector('#importBtn').onclick = () => picker.click();
+  view.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { openDoc = b.dataset.open; render(); });
+}
+let pdfObserver = null;
+async function renderReader() {
+  const d = docs.find(x => x.id === openDoc); if (!d) { openDoc = null; return render(); }
+  const s = docStats(d);
+  view.innerHTML = `
+    <div class="toolbar">
+      <button class="btn ghost small" id="back">‹ Library</button>
+      <div class="spacer"></div>
+      ${s.total ? `<button class="btn small" id="study">Study ${s.total} flashcards</button>` : ''}
+      <button class="btn ghost small" id="remove">Remove</button>
+    </div>
+    <div class="reader" id="reader">${d.type === 'md' ? renderMd(d.text) : '<div class="pdfpages" id="pages"><p class="muted">Opening PDF…</p></div>'}</div>`;
+  view.querySelector('#back').onclick = () => { openDoc = null; render(); };
+  const sb = view.querySelector('#study'); if (sb) sb.onclick = () => { deck = d.id; session = null; tab = 'cards'; openDoc = null; render(); };
+  view.querySelector('#remove').onclick = async () => {
+    if (!confirm(`Remove "${d.name}" from this iPad?`)) return;
+    await del('docs', d.id); openDoc = null; await load(); render();
+  };
+  if (d.type === 'pdf') renderPdf(d);
+}
+async function renderPdf(d) {
+  const pages = document.getElementById('pages');
+  try {
+    const pdfjs = await import('./vendor/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.mjs';
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(await d.blob.arrayBuffer()) }).promise;
+    if (openDoc !== d.id) return;
+    pages.innerHTML = '';
+    if (pdfObserver) pdfObserver.disconnect();
+    pdfObserver = new IntersectionObserver(es => es.forEach(async e => {
+      if (!e.isIntersecting || e.target.dataset.done) return;
+      e.target.dataset.done = 1;
+      const page = await pdf.getPage(+e.target.dataset.p);
+      const w = pages.clientWidth, base = page.getViewport({ scale: 1 });
+      const scale = (w / base.width) * Math.min(window.devicePixelRatio || 1, 2);
+      const vp = page.getViewport({ scale }), c = document.createElement('canvas');
+      c.width = vp.width; c.height = vp.height;
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+      e.target.replaceWith(c);
+    }), { rootMargin: '800px 0px' });
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const ph = document.createElement('div'); ph.className = 'ph'; ph.dataset.p = p;
+      pages.appendChild(ph); pdfObserver.observe(ph);
+    }
+  } catch (err) { pages.innerHTML = `<p class="muted">Couldn't open this PDF (${esc(String(err.message || err))}).</p>`; }
+}
+
+/* Flashcards: simple Leitner boxes. "Got it" moves a card up a box, "Again" sends it back to 0. */
+function deckCards() {
+  const src = deck === 'all' ? docs : docs.filter(d => d.id === deck);
+  return src.flatMap(extractCards);
+}
+function buildSession() {
+  const cs = deckCards();
+  const shuffled = cs.map(c => [box(c.id) + Math.random() * 0.9, c]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+  session = { queue: shuffled, done: 0, total: shuffled.length, flipped: false, again: 0 };
+}
+function renderCards() {
+  const withCards = docs.filter(d => extractCards(d).length);
+  if (deck !== 'all' && !withCards.find(d => d.id === deck)) deck = 'all';
+  if (!session) buildSession();
+  const chips = `<div class="deckpick">
+    <button class="chip ${deck === 'all' ? 'on' : ''}" data-deck="all">All decks</button>
+    ${withCards.map(d => `<button class="chip ${deck === d.id ? 'on' : ''}" data-deck="${esc(d.id)}">${esc(d.name.replace(/^FITSP-Auditor Study Guide:\s*/i, ''))}</button>`).join('')}</div>`;
+  const all = deckCards(), mastered = all.filter(c => box(c.id) >= MASTERED).length;
+  let body;
+  if (!all.length) {
+    body = `<div class="empty"><div style="font-size:20px;font-weight:600">No flashcards yet</div>
+      <p class="muted">Cards come from the numbered "Self-quiz" section in a study guide, or from Q:/A: lines.</p></div>`;
+  } else if (!session.queue.length) {
+    body = `<div class="card"><div class="q">Round done 🎉</div>
+      <div class="hint" style="font-size:17px">${session.total - session.again} of ${session.total} right on the first try · ${mastered}/${all.length} mastered overall</div>
+      <div style="margin-top:24px"><button class="btn" id="restart">Another round</button></div></div>`;
+  } else {
+    const c = session.queue[0];
+    body = `<div class="progress"><span>Card ${session.done + 1} of ${session.total}</span><span>${mastered}/${all.length} mastered</span></div>
+      <button class="card" id="card">
+        ${deck === 'all' ? `<div class="src">${esc(c.docName.replace(/^FITSP-Auditor Study Guide:\s*/i, ''))}</div>` : ''}
+        <div class="q">${inline(c.q)}</div>
+        ${session.flipped ? `<div class="a">${inline(c.a)}</div>` : `<div class="hint">Say your answer out loud, then tap to check</div>`}
+      </button>
+      <div class="grade ${session.flipped ? '' : 'hidden'}">
+        <button class="again" id="again">Again</button><button class="got" id="got">Got it</button></div>`;
+  }
+  view.innerHTML = chips + body;
+  view.querySelectorAll('[data-deck]').forEach(b => b.onclick = () => { deck = b.dataset.deck; session = null; render(); });
+  const card = view.querySelector('#card'); if (card) card.onclick = () => { session.flipped = !session.flipped; renderCards(); };
+  const rs = view.querySelector('#restart'); if (rs) rs.onclick = () => { session = null; renderCards(); };
+  const grade = async ok => {
+    const c = session.queue.shift(), p = progress.get(c.id) || { id: c.id, box: 0 };
+    p.box = ok ? Math.min(p.box + 1, 4) : 0; p.seen = Date.now();
+    progress.set(c.id, p); put('progress', p);
+    if (!ok) { session.again++; session.queue.splice(Math.min(3, session.queue.length), 0, c); session.total++; }
+    session.done++; session.flipped = false; renderCards();
+  };
+  const ag = view.querySelector('#again'); if (ag) ag.onclick = () => grade(false);
+  const gt = view.querySelector('#got'); if (gt) gt.onclick = () => grade(true);
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.tab; if (tab === 'cards') session = null; render(); });
+
+/* ---------- Pomodoro (25 / 5) ---------- */
+const FOCUS = 25 * 60, BREAK = 5 * 60;
+const pEl = document.getElementById('pomo'), pTime = document.getElementById('pomoTime'),
+      pLabel = document.getElementById('pomoLabel'), pToggle = document.getElementById('pomoToggle');
+let pomo = JSON.parse(localStorage.getItem('pomo') || 'null') || { mode: 'focus', left: FOCUS, endsAt: null };
+let audio = null;
+const savePomo = () => localStorage.setItem('pomo', JSON.stringify(pomo));
+const left = () => pomo.endsAt ? Math.max(0, Math.round((pomo.endsAt - Date.now()) / 1000)) : pomo.left;
+function chime() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.35, 0.7].forEach(t => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = 784; o.connect(g); g.connect(audio.destination);
+      g.gain.setValueAtTime(0.0001, audio.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.3, audio.currentTime + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + t + 0.3);
+      o.start(audio.currentTime + t); o.stop(audio.currentTime + t + 0.32);
+    });
+  } catch (e) {}
+}
+function drawPomo() {
+  const s = left();
+  pTime.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  pLabel.textContent = pomo.mode === 'focus' ? 'Focus' : 'Break';
+  pToggle.textContent = pomo.endsAt ? '❚❚' : '▶';
+  pEl.classList.toggle('running', !!pomo.endsAt); pEl.classList.toggle('break', pomo.mode === 'break');
+  if (pomo.endsAt && s === 0) {
+    const wasFocus = pomo.mode === 'focus';
+    pomo = { mode: wasFocus ? 'break' : 'focus', left: wasFocus ? BREAK : FOCUS, endsAt: null }; savePomo();
+    chime(); toast(wasFocus ? 'Pomodoro done. Take a 5-minute break.' : 'Break over. Ready for the next 25?', 8000);
+    drawPomo();
+  }
+}
+pToggle.onclick = () => {
+  if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } // unlock sound on iPad
+  if (pomo.endsAt) pomo = { ...pomo, left: left(), endsAt: null };
+  else pomo = { ...pomo, endsAt: Date.now() + pomo.left * 1000 };
+  savePomo(); drawPomo();
+};
+document.getElementById('pomoReset').onclick = () => { pomo = { mode: 'focus', left: FOCUS, endsAt: null }; savePomo(); drawPomo(); };
+setInterval(drawPomo, 500); drawPomo();
+
+/* ---------- Toast ---------- */
+let tt; function toast(msg, ms = 3000) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.remove('hidden');
+  clearTimeout(tt); tt = setTimeout(() => t.classList.add('hidden'), ms);
+}
+
+/* ---------- Boot ---------- */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+await load(); render();
+await syncBundled(); await load(); render();
+</script>
+</body>
+</html>
