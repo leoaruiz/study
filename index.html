@@ -489,7 +489,12 @@ let tt; function toast(msg, ms = 3000) {
 }
 
 /* ---------- Boot ---------- */
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js');
+  // When an updated version of the app installs, reload once so it's used right away.
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !window.__reloaded) { window.__reloaded = true; location.reload(); } });
+}
 await load(); render();
 await syncBundled(); await load(); render();
 </script>

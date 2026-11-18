@@ -1,5 +1,5 @@
 // Offline cache for the Study app. Bump VERSION whenever you change app files.
-const VERSION = 'study-v2';
+const VERSION = 'study-v3';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
@@ -26,12 +26,21 @@ self.addEventListener('activate', e => {
   })());
 });
 
-// Serve from cache first so the app works with no connection; refresh the cache in the background when online.
+// The page, the study-guide list and the guides themselves: try the network first (3 s limit) so updates
+// show up right away, and fall back to the saved copy when offline. Everything else: saved copy first.
+const FRESH = p => p.endsWith('/') || p.endsWith('.html') || p.includes('/materials/');
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith((async () => {
     const c = await caches.open(VERSION);
+    if (FRESH(url.pathname) || e.request.mode === 'navigate') {
+      try {
+        const r = await Promise.race([fetch(e.request, { cache: 'no-cache' }), new Promise((_, no) => setTimeout(no, 3000))]);
+        if (r.ok) { c.put(e.request, r.clone()); return r; }
+      } catch (err) {}
+      return (await c.match(e.request, { ignoreSearch: true })) || (await c.match('index.html')) || new Response('Offline', { status: 503 });
+    }
     const hit = await c.match(e.request, { ignoreSearch: true });
     const net = fetch(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; }).catch(() => null);
     if (hit) { e.waitUntil(net); return hit; }
